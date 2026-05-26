@@ -1,5 +1,20 @@
 <!DOCTYPE html>
 <html lang="ko">
+<link id="appIcon" rel="apple-touch-icon" href="">
+<script>
+  const c = document.createElement('canvas');
+  c.width = 180; c.height = 180;
+  const ctx = c.getContext('2d');
+  ctx.fillStyle = '#ffffff';
+  ctx.beginPath();
+  ctx.roundRect(0, 0, 180, 180, 40);
+  ctx.fill();
+  ctx.font = '110px serif';
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillText('☂️', 90, 95);
+  document.getElementById('appIcon').href = c.toDataURL();
+</script>
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
