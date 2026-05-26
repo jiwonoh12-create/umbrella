@@ -1,0 +1,151 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="우산 알림">
+<title>☂️ 우산 챙겨요?</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Apple SD Gothic Neo', sans-serif;
+    background: #0a1628;
+    color: #fff;
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 24px;
+    overflow: hidden;
+  }
+  .bg-circle { position: fixed; border-radius: 50%; filter: blur(80px); opacity: 0.15; pointer-events: none; }
+  .bg-circle-1 { width: 400px; height: 400px; background: #4A90D9; top: -100px; left: -100px; }
+  .bg-circle-2 { width: 300px; height: 300px; background: #1a5fa8; bottom: -50px; right: -80px; }
+  .card { background: rgba(255,255,255,0.07); border: 1px solid rgba(255,255,255,0.1); border-radius: 28px; padding: 36px 32px; width: 100%; max-width: 340px; text-align: center; backdrop-filter: blur(20px); position: relative; z-index: 1; }
+  .location { font-size: 13px; color: rgba(255,255,255,0.5); margin-bottom: 28px; display: flex; align-items: center; justify-content: center; gap: 5px; }
+  .main-icon { font-size: 80px; margin-bottom: 16px; display: block; transition: all 0.5s ease; }
+  .status-text { font-size: 22px; font-weight: 700; margin-bottom: 8px; line-height: 1.3; }
+  .sub-text { font-size: 14px; color: rgba(255,255,255,0.55); margin-bottom: 28px; line-height: 1.6; }
+  .prob-ring { width: 120px; height: 120px; margin: 0 auto 24px; position: relative; }
+  .prob-ring svg { transform: rotate(-90deg); }
+  .prob-ring .track { fill: none; stroke: rgba(255,255,255,0.1); stroke-width: 8; }
+  .prob-ring .fill { fill: none; stroke-width: 8; stroke-linecap: round; transition: stroke-dashoffset 1s ease; }
+  .prob-center { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); text-align: center; }
+  .prob-number { font-size: 28px; font-weight: 700; line-height: 1; }
+  .prob-label { font-size: 11px; color: rgba(255,255,255,0.5); margin-top: 2px; }
+  .weather-row { display: flex; justify-content: space-around; background: rgba(255,255,255,0.05); border-radius: 16px; padding: 16px 12px; margin-bottom: 20px; }
+  .weather-item { text-align: center; }
+  .weather-item .wi-val { font-size: 15px; font-weight: 600; }
+  .weather-item .wi-label { font-size: 11px; color: rgba(255,255,255,0.45); margin-top: 3px; }
+  .refresh-btn { background: rgba(74,144,217,0.2); border: 1px solid rgba(74,144,217,0.4); color: #7ec8f5; border-radius: 14px; padding: 12px 28px; font-size: 14px; font-weight: 600; cursor: pointer; width: 100%; transition: all 0.2s; font-family: inherit; }
+  .refresh-btn:active { transform: scale(0.97); background: rgba(74,144,217,0.3); }
+  .loading { display: flex; flex-direction: column; align-items: center; gap: 14px; }
+  .spinner { width: 40px; height: 40px; border: 3px solid rgba(255,255,255,0.1); border-top-color: #4A90D9; border-radius: 50%; animation: spin 0.8s linear infinite; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  .error-box { background: rgba(220,80,80,0.1); border: 1px solid rgba(220,80,80,0.3); border-radius: 14px; padding: 16px; font-size: 13px; color: #ffaaaa; margin-bottom: 16px; line-height: 1.6; }
+  .add-hint { margin-top: 20px; font-size: 11px; color: rgba(255,255,255,0.3); line-height: 1.7; }
+  .add-hint strong { color: rgba(255,255,255,0.5); }
+  .rain-yes .main-icon { animation: wiggle 1s ease-in-out infinite; }
+  @keyframes wiggle { 0%,100% { transform: rotate(-8deg); } 50% { transform: rotate(8deg); } }
+</style>
+</head>
+<body>
+<div class="bg-circle bg-circle-1"></div>
+<div class="bg-circle bg-circle-2"></div>
+<div class="card" id="card">
+  <div class="loading" id="loading">
+    <div class="spinner"></div>
+    <p style="font-size:14px; color:rgba(255,255,255,0.5)">날씨 확인 중...</p>
+  </div>
+  <div id="result" style="display:none">
+    <div class="location">
+      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7z"/><circle cx="12" cy="9" r="2.5"/></svg>
+      송파구
+    </div>
+    <div class="main-icon" id="mainIcon">☂️</div>
+    <div class="status-text" id="statusText">확인 중...</div>
+    <div class="sub-text" id="subText"></div>
+    <div class="prob-ring">
+      <svg width="120" height="120" viewBox="0 0 120 120">
+        <circle class="track" cx="60" cy="60" r="52"/>
+        <circle class="fill" id="ringFill" cx="60" cy="60" r="52" stroke="#4A90D9" stroke-dasharray="326.7" stroke-dashoffset="326.7"/>
+      </svg>
+      <div class="prob-center">
+        <div class="prob-number" id="probNum">-</div>
+        <div class="prob-label">강수확률</div>
+      </div>
+    </div>
+    <div class="weather-row" id="weatherRow"></div>
+    <button class="refresh-btn" onclick="fetchWeather()">새로고침</button>
+    <p class="add-hint">
+      <strong>홈화면에 추가하는 법</strong><br>
+      사파리 하단 공유 버튼 → 홈 화면에 추가
+    </p>
+  </div>
+  <div id="errorDiv" style="display:none">
+    <div class="error-box" id="errorMsg"></div>
+    <button class="refresh-btn" onclick="fetchWeather()">다시 시도</button>
+  </div>
+</div>
+<script>
+async function fetchWeather() {
+  document.getElementById('loading').style.display = 'flex';
+  document.getElementById('result').style.display = 'none';
+  document.getElementById('errorDiv').style.display = 'none';
+  try {
+    const url = 'https://api.open-meteo.com/v1/forecast?latitude=37.5145&longitude=127.1059&daily=precipitation_probability_max,temperature_2m_max,temperature_2m_min,weathercode&timezone=Asia%2FSeoul&forecast_days=1';
+    const res = await fetch(url);
+    if (!res.ok) throw new Error('오류');
+    const data = await res.json();
+    const prob = data.daily.precipitation_probability_max[0];
+    const tempMax = Math.round(data.daily.temperature_2m_max[0]);
+    const tempMin = Math.round(data.daily.temperature_2m_min[0]);
+    const wcode = data.daily.weathercode[0];
+    document.getElementById('loading').style.display = 'none';
+    document.getElementById('result').style.display = 'block';
+    const icon = document.getElementById('mainIcon');
+    const statusText = document.getElementById('statusText');
+    const subText = document.getElementById('subText');
+    const card = document.getElementById('card');
+    if (prob >= 50) {
+      icon.textContent = '☂️'; statusText.textContent = '오늘 비 올 수 있어요!';
+      subText.textContent = `강수확률 ${prob}% — 우산 꼭 챙기세요`; card.classList.add('rain-yes');
+    } else if (prob >= 30) {
+      icon.textContent = '🌂'; statusText.textContent = '비가 올 수도 있어요';
+      subText.textContent = `강수확률 ${prob}% — 접이식 우산 챙기면 좋아요`; card.classList.remove('rain-yes');
+    } else {
+      icon.textContent = '☀️'; statusText.textContent = '오늘은 우산 필요 없어요!';
+      subText.textContent = `강수확률 ${prob}% — 맑은 하루 되세요 😊`; card.classList.remove('rain-yes');
+    }
+    document.getElementById('probNum').textContent = prob + '%';
+    const offset = 326.7 - (prob / 100) * 326.7;
+    const ring = document.getElementById('ringFill');
+    ring.style.strokeDashoffset = offset;
+    ring.style.stroke = prob >= 50 ? '#4A90D9' : prob >= 30 ? '#7ec8f5' : '#5BC8A0';
+    document.getElementById('weatherRow').innerHTML = `
+      <div class="weather-item"><div class="wi-val">${tempMax}°</div><div class="wi-label">최고기온</div></div>
+      <div class="weather-item"><div class="wi-val">${tempMin}°</div><div class="wi-label">최저기온</div></div>
+      <div class="weather-item"><div class="wi-val">${getWeatherEmoji(wcode)}</div><div class="wi-label">${getWeatherDesc(wcode)}</div></div>`;
+  } catch (e) {
+    document.getElementById('loading').style.display = 'none';
+    document.getElementById('errorDiv').style.display = 'block';
+    document.getElementById('errorMsg').textContent = '날씨 정보를 불러오지 못했어요. 인터넷 연결을 확인해주세요.';
+  }
+}
+function getWeatherEmoji(code) {
+  if (code === 0) return '☀️'; if (code <= 2) return '⛅'; if (code <= 3) return '☁️';
+  if (code <= 49) return '🌫️'; if (code <= 59) return '🌧️'; if (code <= 69) return '🌨️';
+  if (code <= 79) return '❄️'; if (code <= 82) return '🌧️'; if (code <= 99) return '⛈️'; return '🌤️';
+}
+function getWeatherDesc(code) {
+  if (code === 0) return '맑음'; if (code <= 2) return '구름 조금'; if (code <= 3) return '흐림';
+  if (code <= 49) return '안개'; if (code <= 59) return '이슬비'; if (code <= 69) return '비/눈';
+  if (code <= 79) return '눈'; if (code <= 82) return '소나기'; if (code <= 99) return '천둥번개'; return '흐림';
+}
+fetchWeather();
+</script>
+</body>
+</html>
