@@ -1,20 +1,5 @@
 <!DOCTYPE html>
 <html lang="ko">
-<link id="appIcon" rel="apple-touch-icon" href="">
-<script>
-  const c = document.createElement('canvas');
-  c.width = 180; c.height = 180;
-  const ctx = c.getContext('2d');
-  ctx.fillStyle = '#ffffff';
-  ctx.beginPath();
-  ctx.roundRect(0, 0, 180, 180, 40);
-  ctx.fill();
-  ctx.font = '110px serif';
-  ctx.textAlign = 'center';
-  ctx.textBaseline = 'middle';
-  ctx.fillText('☂️', 45, 90);
-  document.getElementById('appIcon').href = c.toDataURL();
-</script>
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -22,6 +7,7 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="우산 알림">
 <title>☂️ 우산 챙겨요?</title>
+<link id="appIcon" rel="apple-touch-icon" href="">
 <style>
   * { box-sizing: border-box; margin: 0; padding: 0; }
   body {
@@ -61,8 +47,7 @@
   .spinner { width: 40px; height: 40px; border: 3px solid rgba(255,255,255,0.1); border-top-color: #4A90D9; border-radius: 50%; animation: spin 0.8s linear infinite; }
   @keyframes spin { to { transform: rotate(360deg); } }
   .error-box { background: rgba(220,80,80,0.1); border: 1px solid rgba(220,80,80,0.3); border-radius: 14px; padding: 16px; font-size: 13px; color: #ffaaaa; margin-bottom: 16px; line-height: 1.6; }
-  .add-hint { margin-top: 20px; font-size: 11px; color: rgba(255,255,255,0.3); line-height: 1.7; }
-  .add-hint strong { color: rgba(255,255,255,0.5); }
+  .update-time { font-size: 11px; color: rgba(255,255,255,0.3); margin-top: 12px; }
   .rain-yes .main-icon { animation: wiggle 1s ease-in-out infinite; }
   @keyframes wiggle { 0%,100% { transform: rotate(-8deg); } 50% { transform: rotate(8deg); } }
 </style>
@@ -95,33 +80,116 @@
     </div>
     <div class="weather-row" id="weatherRow"></div>
     <button class="refresh-btn" onclick="fetchWeather()">새로고침</button>
-    <p class="add-hint">
-      <strong>홈화면에 추가하는 법</strong><br>
-      사파리 하단 공유 버튼 → 홈 화면에 추가
-    </p>
+    <div class="update-time" id="updateTime"></div>
   </div>
   <div id="errorDiv" style="display:none">
     <div class="error-box" id="errorMsg"></div>
     <button class="refresh-btn" onclick="fetchWeather()">다시 시도</button>
   </div>
 </div>
+
 <script>
+// 홈화면 아이콘 생성
+const c = document.createElement('canvas');
+c.width = 180; c.height = 180;
+const ctx = c.getContext('2d');
+ctx.fillStyle = '#ffffff';
+ctx.beginPath();
+ctx.roundRect(0, 0, 180, 180, 40);
+ctx.fill();
+ctx.font = '110px serif';
+ctx.textAlign = 'center';
+ctx.textBaseline = 'middle';
+ctx.fillText('☂️', 40, 90);
+document.getElementById('appIcon').href = c.toDataURL();
+
+const API_KEY = 'ErndoGHJSWG53aBhyRlhgw';
+const NX = 62; // 송파구 격자 X
+const NY = 124; // 송파구 격자 Y
+
+// 한국 시간 기준으로 날짜/시간 구하기
+function getKSTDate() {
+  const now = new Date();
+  const kst = new Date(now.toLocaleString('en-US', { timeZone: 'Asia/Seoul' }));
+  const year = kst.getFullYear();
+  const month = String(kst.getMonth() + 1).padStart(2, '0');
+  const day = String(kst.getDate()).padStart(2, '0');
+  const hours = kst.getHours();
+  const minutes = kst.getMinutes();
+  return { year, month, day, hours, minutes, kst };
+}
+
+// 기상청 단기예보 발표시간 계산 (02,05,08,11,14,17,20,23시)
+function getBaseTime() {
+  const { hours, minutes } = getKSTDate();
+  const baseTimes = [2, 5, 8, 11, 14, 17, 20, 23];
+  let baseHour = 23;
+  for (let i = 0; i < baseTimes.length; i++) {
+    if (hours < baseTimes[i] || (hours === baseTimes[i] && minutes < 10)) {
+      baseHour = i === 0 ? 23 : baseTimes[i - 1];
+      break;
+    }
+    baseHour = baseTimes[i];
+  }
+  return String(baseHour).padStart(2, '0') + '00';
+}
+
+function getBaseDate() {
+  const { year, month, day, hours, minutes } = getKSTDate();
+  // 0시~2시10분 사이면 전날 23시 발표 기준
+  if (hours < 2 || (hours === 2 && minutes < 10)) {
+    const yesterday = new Date();
+    yesterday.setDate(yesterday.getDate() - 1);
+    const ky = new Date(yesterday.toLocaleString('en-US', { timeZone: 'Asia/Seoul' }));
+    return `${ky.getFullYear()}${String(ky.getMonth()+1).padStart(2,'0')}${String(ky.getDate()).padStart(2,'0')}`;
+  }
+  return `${year}${month}${day}`;
+}
+
 async function fetchWeather() {
   document.getElementById('loading').style.display = 'flex';
   document.getElementById('result').style.display = 'none';
   document.getElementById('errorDiv').style.display = 'none';
+
   try {
-    const res = await fetch('https://wttr.in/37.5145,127.1059?format=j1');
-    if (!res.ok) throw new Error('오류');
+    const baseDate = getBaseDate();
+    const baseTime = getBaseTime();
+    const { year, month, day } = getKSTDate();
+    const todayStr = `${year}${month}${day}`;
+
+    const url = `https://apihub.kma.go.kr/api/typ02/openApi/VilageFcstInfoService_2.0/getVilageFcst?pageNo=1&numOfRows=1000&dataType=JSON&base_date=${baseDate}&base_time=${baseTime}&nx=${NX}&ny=${NY}&authKey=${API_KEY}`;
+
+    const res = await fetch(url);
+    if (!res.ok) throw new Error('API 오류');
     const data = await res.json();
 
-    const today = data.weather[0];
-    const hourly = today.hourly;
-    const maxRain = Math.max(...hourly.map(h => parseInt(h.chanceofrain)));
-    const tempMax = parseInt(today.maxtempC);
-    const tempMin = parseInt(today.mintempC);
-    const currentDesc = data.current_condition[0].lang_ko[0].value.trim();
-    const currentCode = parseInt(data.current_condition[0].weatherCode);
+    const items = data.response.body.items.item;
+    if (!items) throw new Error('데이터 없음');
+
+    // 오늘 날짜 데이터만 필터
+    const todayItems = items.filter(item => item.fcstDate === todayStr);
+
+    // 강수확률(POP) 최대값
+    const popValues = todayItems.filter(i => i.category === 'POP').map(i => parseInt(i.fcstValue));
+    const maxPop = popValues.length > 0 ? Math.max(...popValues) : 0;
+
+    // 최고/최저기온
+    const tmpValues = todayItems.filter(i => i.category === 'TMP').map(i => parseFloat(i.fcstValue));
+    const tmxValues = todayItems.filter(i => i.category === 'TMX').map(i => parseFloat(i.fcstValue));
+    const tmnValues = todayItems.filter(i => i.category === 'TMN').map(i => parseFloat(i.fcstValue));
+
+    let tempMax = tmxValues.length > 0 ? Math.round(Math.max(...tmxValues)) : (tmpValues.length > 0 ? Math.round(Math.max(...tmpValues)) : '-');
+    let tempMin = tmnValues.length > 0 ? Math.round(Math.min(...tmnValues)) : (tmpValues.length > 0 ? Math.round(Math.min(...tmpValues)) : '-');
+
+    // 하늘상태(SKY), 강수형태(PTY) - 현재 시간에 가장 가까운 값
+    const { hours } = getKSTDate();
+    const curTime = String(hours).padStart(2, '0') + '00';
+    const skyItems = todayItems.filter(i => i.category === 'SKY');
+    const ptyItems = todayItems.filter(i => i.category === 'PTY');
+    const curSky = skyItems.find(i => i.fcstTime >= curTime) || skyItems[0];
+    const curPty = ptyItems.find(i => i.fcstTime >= curTime) || ptyItems[0];
+    const skyVal = curSky ? parseInt(curSky.fcstValue) : 1;
+    const ptyVal = curPty ? parseInt(curPty.fcstValue) : 0;
 
     document.getElementById('loading').style.display = 'none';
     document.getElementById('result').style.display = 'block';
@@ -131,51 +199,66 @@ async function fetchWeather() {
     const subText = document.getElementById('subText');
     const card = document.getElementById('card');
 
-    if (maxRain >= 50) {
+    if (maxPop >= 50) {
       icon.textContent = '☂️';
       statusText.textContent = '오늘 비 올 수 있어요!';
-      subText.textContent = `강수확률 최대 ${maxRain}% — 우산 꼭 챙기세요`;
+      subText.textContent = `강수확률 최대 ${maxPop}% — 우산 꼭 챙기세요`;
       card.classList.add('rain-yes');
-    } else if (maxRain >= 30) {
+    } else if (maxPop >= 30) {
       icon.textContent = '🌂';
       statusText.textContent = '비가 올 수도 있어요';
-      subText.textContent = `강수확률 최대 ${maxRain}% — 접이식 우산 챙기면 좋아요`;
+      subText.textContent = `강수확률 최대 ${maxPop}% — 접이식 우산 챙기면 좋아요`;
       card.classList.remove('rain-yes');
     } else {
       icon.textContent = '☀️';
       statusText.textContent = '오늘은 우산 필요 없어요!';
-      subText.textContent = `강수확률 최대 ${maxRain}% — 맑은 하루 되세요 😊`;
+      subText.textContent = `강수확률 최대 ${maxPop}% — 맑은 하루 되세요 😊`;
       card.classList.remove('rain-yes');
     }
 
-    document.getElementById('probNum').textContent = maxRain + '%';
-    const offset = 326.7 - (maxRain / 100) * 326.7;
+    document.getElementById('probNum').textContent = maxPop + '%';
+    const offset = 326.7 - (maxPop / 100) * 326.7;
     const ring = document.getElementById('ringFill');
     ring.style.strokeDashoffset = offset;
-    ring.style.stroke = maxRain >= 50 ? '#4A90D9' : maxRain >= 30 ? '#7ec8f5' : '#5BC8A0';
+    ring.style.stroke = maxPop >= 50 ? '#4A90D9' : maxPop >= 30 ? '#7ec8f5' : '#5BC8A0';
+
+    const weatherEmoji = getWeatherEmoji(ptyVal, skyVal);
+    const weatherDesc = getWeatherDesc(ptyVal, skyVal);
 
     document.getElementById('weatherRow').innerHTML = `
       <div class="weather-item"><div class="wi-val">${tempMax}°</div><div class="wi-label">최고기온</div></div>
       <div class="weather-item"><div class="wi-val">${tempMin}°</div><div class="wi-label">최저기온</div></div>
-      <div class="weather-item"><div class="wi-val">${getWeatherEmoji(currentCode)}</div><div class="wi-label">${currentDesc}</div></div>`;
+      <div class="weather-item"><div class="wi-val">${weatherEmoji}</div><div class="wi-label">${weatherDesc}</div></div>`;
+
+    const now = new Date().toLocaleString('ko-KR', { timeZone: 'Asia/Seoul', hour: '2-digit', minute: '2-digit' });
+    document.getElementById('updateTime').textContent = `${now} 기준 · 기상청 단기예보`;
+
   } catch (e) {
     document.getElementById('loading').style.display = 'none';
     document.getElementById('errorDiv').style.display = 'block';
-    document.getElementById('errorMsg').textContent = '날씨 정보를 불러오지 못했어요. 잠시 후 다시 시도해주세요.';
+    document.getElementById('errorMsg').textContent = '날씨 정보를 불러오지 못했어요. 잠시 후 다시 시도해주세요.\n(' + e.message + ')';
   }
 }
 
-function getWeatherEmoji(code) {
-  if (code === 113) return '☀️';
-  if (code <= 116) return '⛅';
-  if (code <= 122) return '☁️';
-  if (code <= 143) return '🌫️';
-  if (code <= 176) return '🌦️';
-  if (code <= 263) return '🌧️';
-  if (code <= 299) return '🌧️';
-  if (code <= 377) return '🌨️';
-  if (code <= 394) return '⛈️';
+function getWeatherEmoji(pty, sky) {
+  if (pty === 1 || pty === 4) return '🌧️';
+  if (pty === 2) return '🌨️';
+  if (pty === 3) return '❄️';
+  if (sky === 1) return '☀️';
+  if (sky === 3) return '⛅';
+  if (sky === 4) return '☁️';
   return '🌤️';
+}
+
+function getWeatherDesc(pty, sky) {
+  if (pty === 1) return '비';
+  if (pty === 2) return '비/눈';
+  if (pty === 3) return '눈';
+  if (pty === 4) return '소나기';
+  if (sky === 1) return '맑음';
+  if (sky === 3) return '구름많음';
+  if (sky === 4) return '흐림';
+  return '맑음';
 }
 
 fetchWeather();
