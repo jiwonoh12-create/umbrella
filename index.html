@@ -157,9 +157,9 @@ async function fetchWeather() {
     const { year, month, day } = getKSTDate();
     const todayStr = `${year}${month}${day}`;
 
-    const url = `https://apihub.kma.go.kr/api/typ02/openApi/VilageFcstInfoService_2.0/getVilageFcst?pageNo=1&numOfRows=1000&dataType=JSON&base_date=${baseDate}&base_time=${baseTime}&nx=${NX}&ny=${NY}&authKey=${API_KEY}`;
-
-    const res = await fetch(url);
+const url = `https://corsproxy.io/?https://apihub.kma.go.kr/api/typ02/openApi/VilageFcstInfoService_2.0/getVilageFcst?pageNo=1&numOfRows=1000&dataType=JSON&base_date=${baseDate}&base_time=${baseTime}&nx=${NX}&ny=${NY}&authKey=${API_KEY}`;
+   
+   const res = await fetch(url);
     if (!res.ok) throw new Error('API 오류');
     const data = await res.json();
 
